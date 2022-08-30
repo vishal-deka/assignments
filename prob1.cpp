@@ -1,3 +1,10 @@
+/*
+The solution is to use the brute force algorithm to count inverses
+but parallelize the outer loop. The outer loop iterates over the 
+array once and so it is divided fairly among the threads.
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
@@ -49,6 +56,8 @@ int main(int argc, char *argv[])
 
     // output array
     counts = (int *)malloc(NUM_THREADS * sizeof(int));
+    
+    //create threads
     for (int i = 0; i < NUM_THREADS; i++)
     {
         thread_args[i] = i;
