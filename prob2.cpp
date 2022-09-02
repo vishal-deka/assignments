@@ -28,26 +28,9 @@ std::ifstream is;
 std::ofstream os;
 int NUM_THREADS;
 int P,W;
-std::vector<int> nos;
+
 int eof=0;
 
-int distinct_elements(std::vector<int> arr){
-   // Sorting the array
-   int n = arr.size();
-   std::sort(arr.begin(),arr.end());
-   // Traverse the sorted array
-   int count = 0;
-   for (int i = 0; i < n; i++){
-      // Moving the index when duplicate is found
-      while (i < n - 1 && arr[i] == arr[i + 1]){
-        std::cout<<arr[i]<<" ";
-         i++;
-      }
-      count++;
-   }
-std::cout<<"\n";
-   return count;
-}
 
 bool isPrime(int n)
 {
@@ -119,9 +102,7 @@ int main(int argc, char *argv[])
             retval = pthread_cancel(threads[i]);
     }
     printf("========== consumers completed ==========\n");
-    //std::cout<<nos.size()<<std::endl;
-    //std::cout<<distinct_elements(nos)<<std::endl;
-    //printf("%d %d\n", totprod, totcon);
+    
     return 0;
 }
 
@@ -157,7 +138,7 @@ void *producer(void *param)
             pthread_cond_wait(&c_prod, &m);
         }
         buffer[add] = number;
-        nos.push_back(number);
+        
         add = (add + 1) % BUF_SIZE;
         num++;
         
