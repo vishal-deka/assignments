@@ -2,6 +2,9 @@
 #define __PKEY__FILE_H
 
 #include <stdint.h>
+#include <iostream>
+#include <pthread.h>
+#include <unordered_map>
 
 struct operation{
     uint8_t type;
@@ -10,7 +13,6 @@ struct operation{
 };
 
 int enqueue(struct operation *op);
-int check_status(int jobloc);
-uint64_t find(uint32_t key);
+
 
 #endif

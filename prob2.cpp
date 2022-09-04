@@ -1,176 +1,119 @@
-#include <pthread.h>
+/*
+The solution is to use the brute force algorithm to count inverses
+but parallelize the outer loop. The outer loop iterates over the
+array once and so it is divided fairly among the threads.
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <fstream>
-#include <vector>
+#include <algorithm>
+#include <pthread.h>
+#include <ctime>   // std::time
+#include <cstdlib> // std::rand, std::srand
 #include <iostream>
-#include<algorithm>
-/* Producer/consumer program illustrating conditional variables */
+#include <cmath>
+#include <random>
+#define ENDL std::endl
 
-/* Size of shared buffer */
+void *inversion_counter(void *ptr);
 
-
-int *buffer; /* shared buffer */
-int BUF_SIZE;
-int add = 0;          /* place to add next element */
-int rem = 0;          /* place to remove next element */
-int num = 0;          /* number elements in buffer */
-int done = 0;
-int totprod = 0, totcon = 0;
-pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;    /* mutex lock for buffer */
-pthread_mutex_t n = PTHREAD_MUTEX_INITIALIZER;  // mutex for file
-pthread_cond_t c_cons = PTHREAD_COND_INITIALIZER; /* consumer waits on this cond var */
-pthread_cond_t c_prod = PTHREAD_COND_INITIALIZER; /* producer waits on this cond var */
-int flag = 0;
-void *producer(void *param);
-void *consumer(void *param);
-std::ifstream is;
-std::ofstream os;
-int NUM_THREADS;
-int P,W;
-
-int eof=0;
-
-
-bool isPrime(int n)
+// Generate " max " random numbers in the range [0 , max -1] and
+// fill in the output variable " array "
+void generate_rand_nums(int max, int *array)
 {
-    // Corner case
-    if (n <= 1)
-        return false;
-
-    // Check from 2 to n-1
-    for (int i = 2; i < n; i++)
-        if (n % i == 0)
-            return false;
-
-    return true;
+    const int range_from = 0;
+    const int range_to = max - 1;
+    std ::random_device rd;                                          // obtain a random number from hardware
+    std ::mt19937 gen(rd());                                         // seed the generator
+    std ::uniform_int_distribution<int> distr(range_from, range_to); // inclusive
+    for (int i = 0; i < max; i++)
+    {
+        array[i] = distr(gen); // generate numbers
+    }
 }
+
+int *arr;
+int *counts;
+int SIZE, NUM_THREADS;
 int main(int argc, char *argv[])
 {
-    if (argc<4) {
-        printf("Usage: ./2prob producers buffer_size workers\n");
+
+    if (argc < 3)
+    {
+        printf("Usage: ./prob2 n p\n");
         return 0;
     }
-    P = atoi(argv[1]);
-    BUF_SIZE = atoi(argv[2]);
-    W = atoi(argv[3]);
-
-    buffer = (int* )malloc(BUF_SIZE*(sizeof(int)));
-    NUM_THREADS = P+W;
-    int thread_args[NUM_THREADS], retval;
-    pthread_t threads[NUM_THREADS]; /* thread identifiers */
-    int i;
-    is.open("input.txt");
-    os.open("prime.txt");
-
-    /* create the threads; may be any number, in general */
-    for (int i = 0; i < NUM_THREADS; i++)
+    SIZE = atoi(argv[1]);
+    NUM_THREADS = atoi(argv[2]);
+    if (NUM_THREADS > SIZE)
     {
-        if (i % 2 == 0)
-        {
-            thread_args[i] = i;
-            retval = pthread_create(&threads[i], NULL, producer, (void *)&thread_args[i]);
-        }
-        else
-        {
-            thread_args[i] = i;
-            retval = pthread_create(&threads[i], NULL, consumer, (void *)&thread_args[i]);
-        }
+        std::cout << "ERROR: Number of threads must be less than size of array\n";
+        return 0;
+    }
+    else if (SIZE <= 0 || NUM_THREADS <= 0)
+    {
+        std::cout << "Invalid values of n and p\n";
+        return 0;
     }
 
-    for (int i = 0; i < NUM_THREADS; i++)
-    {
-        // second argument is a buffer for return value or 0.
-        if (i % 2 == 0)
-            retval = pthread_join(threads[i], 0);
-    }
-    printf("========== producers completed ========== %d\n", done);
+    pthread_t threads[NUM_THREADS];
 
-    // waiting for consumers to finish
-    while (num != 0)
-    {
-        ;
-    }
+    int retval;
+    int thread_args[NUM_THREADS];
+    //std::cout << "size: " << SIZE << " threads: " << NUM_THREADS << std::endl;
 
-    flag = 1;
-    // cancelling consumers since they will never terminate
-    // also verified that consumers have finished reading.
-    for (int i = 0; i < NUM_THREADS; i++)
-    {
-        // second argument is a buffer for return value or 0.
-        if (i % 2 != 0)
-            retval = pthread_cancel(threads[i]);
-    }
-    printf("========== consumers completed ==========\n");
+    // generate random array
+    arr = (int *)malloc(SIZE * sizeof(int));
+    generate_rand_nums(SIZE, arr);
+    // for(int i=0;i<SIZE;i++) std::cout<<arr[i]<<",";
+    // std::cout<<ENDL;
     
+    // array for results of each thread
+    counts = (int *)malloc(NUM_THREADS * sizeof(int));
+
+    // create threads
+    for (int i = 0; i < NUM_THREADS; i++)
+    {
+        thread_args[i] = i;
+
+        retval = pthread_create(&threads[i], NULL, inversion_counter, (void *)&thread_args[i]);
+    }
+
+    for (int i = 0; i < NUM_THREADS; i++)
+    {
+        // second argument is a buffer for return value or 0.
+        retval = pthread_join(threads[i], 0);
+    }
+    int sum = 0;
+    for (int i = 0; i < NUM_THREADS; i++)
+        sum += counts[i];
+    printf("Inversions: %d\n", sum);
+
     return 0;
 }
 
-void *producer(void *param)
+void *inversion_counter(void *ptr)
 {
-    int i, number;
-    int id = *((int *)param);
-    while (1)
+    int countloc = 0, a_ = 0;
+    int id = *((int *)ptr);
+    // calculate offset and chunk size for this thread from id
+    int offset = id * ceil((float)SIZE / NUM_THREADS);
+    int chunk = ceil((float)SIZE / NUM_THREADS);
+
+    if (id == NUM_THREADS - 1)
     {
-        pthread_mutex_lock(&m);
-        if (is.eof()) {
-            pthread_mutex_unlock(&m);
-            return 0;
-        }
-        std::string line;
-        std::getline(is, line);
-        if (!line.empty()){
-            
-            number = stoi(line);
-        }
-        else
-        {
-            // this means EOF has been reached. i
-            pthread_mutex_unlock(&m);
-            continue;
-            
-        }
-        if (num > BUF_SIZE)
-            exit(1);
-
-        while (num == BUF_SIZE)
-        {
-            pthread_cond_wait(&c_prod, &m);
-        }
-        buffer[add] = number;
-        
-        add = (add + 1) % BUF_SIZE;
-        num++;
-        
-        pthread_mutex_unlock(&m);
-        pthread_cond_signal(&c_cons);
+        // for the last iteration we iterate till the 2nd last element in sequential code
+        a_ = -1;
+        // the last thread will get the remaining elements after equal distribution
+        chunk -= NUM_THREADS * chunk - SIZE;
     }
-   
-}
-
-void *consumer(void *param)
-{
-    int i;
-    int id = *((int *)param);
-    while (1)
+    // std::cout<<"id: "<<id << " chunk size: " <<chunk <<std::endl;
+    for (int i = offset; i < offset + chunk + a_; i++)
     {
-        pthread_mutex_lock(&m);
-        if (num < 0)
-            exit(1);
-        while (num == 0)
-        {
-            pthread_cond_wait(&c_cons, &m);
-        }
-
-        i = buffer[rem];
-        rem = (rem + 1) % BUF_SIZE;
-        num--;
-        totcon++;
-        if (isPrime(i))
-        {
-            os<<i<<std::endl;
-        }
-        pthread_mutex_unlock(&m);
-        pthread_cond_signal(&c_prod);
+        for (int j = i + 1; j < SIZE; j++)
+            if (arr[i] > arr[j])
+                countloc++;
     }
+    // printf("\n");
+    counts[id] = countloc;
 }
