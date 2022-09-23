@@ -1,0 +1,55 @@
+void optimized(double **__restrict__ A, double *__restrict__ x, double *__restrict__ y_opt, double *__restrict__ z_opt)
+{
+  for (int i = 0; i < N; i++)
+  {
+    for (int j = 0; j < N; j++)
+    {
+      y_opt[j] = y_opt[j] + A[i][j] * x[i];
+    }
+  }
+  for (int j = 0; j < N; j++)
+  {
+    for (int i = 0; i < N; i++)
+    {
+      z_opt[j] = z_opt[j] + A[j][i] * x[i];
+    }
+  }
+}
+distribute + interchange
+
+problem2.cpp:73:21: optimized: applying unroll and jam with factor 2
+problem2.cpp:82:23: optimized: loop vectorized using 16 byte vectors
+problem2.cpp:75:23: optimized: loop vectorized using 16 byte vectors
+
+Reference Version: Matrix Size = 8192, 0.64178 GFLOPS; Time = 0.41827 sec
+Optimized Version: Matrix Size = 8192, Time = 0.10044 sec
+No differences found between base and test versions
+Intrinsics Version: Matrix Size = 8192, Time = 0.00000 sec
+8192 Diffs found over threshold 0.00000; Max Diff = 447290032.50000
+
+
+## problem 3
+parallelization method: used pipeling. when 1 iteration of k begins, after a certain number of iterations of i, begin the next iteration of k in a new thread
+since the rows are written one once.
+
+for problem size N = 1<<12
+$ g++ -g -fopenmp -o prob3 problem3.cpp 
+$ ./prob3
+Time for reference version: 4.30799 seconds
+No differences found between base and test versions
+Version1: Time with OpenMP: 1.85099 seconds
+
+novo@vimaan:~/course/610/assign3$ g++ -O2 -g -fopenmp -o prob3 problem3.cpp 
+novo@vimaan:~/course/610/assign3$ ./prob3
+Time for reference version: 0.934125 seconds
+No differences found between base and test versions
+Version1: Time with OpenMP: 0.771951 seconds
+
+No time difference with O3 optimization
+
+NOTE: got more speedup for larger problem size (1<<13)
+$ g++ -g -fopenmp -o prob3 problem3.cpp 
+$ ./prob3
+Time for reference version: 17.215 seconds
+No differences found between base and test versions
+Version1: Time with OpenMP: 3.86221 seconds
