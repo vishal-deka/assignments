@@ -1,4 +1,4 @@
-// g++ -msse4 -mavx -march=native -O3 -fopt-info-vec-optimized -fopt-info-vec-missed -o problem5 problem5.cpp
+// g++ -msse4 -mavx -march=native -O3 -fopt-info-vec-optimized -fopt-info-vec-missed -fopenmp -o problem5 problem5.cpp
 
 #include <cassert>
 #include <chrono>
@@ -7,6 +7,10 @@
 #include <emmintrin.h>
 #include <immintrin.h>
 #include <iostream>
+#include <omp.h>
+#include<stdio.h>
+typedef __m256i v8i;
+typedef __m128i v4i;
 
 using std::cout;
 using std::endl;
@@ -18,6 +22,7 @@ using std::chrono::microseconds;
 #define N (1 << 16)
 #define SSE_WIDTH 128
 #define AVX2_WIDTH 256
+#define NUM_THREADS 8
 
 void print_array(int* array);
 
@@ -34,11 +39,85 @@ __attribute__((optimize("no-tree-vectorize"))) int ref_version(int* __restrict__
   return tmp;
 }
 
-int omp_version(int* source, int* dest) { return 0; }
+int omp_version(int* source, int* dest) { 
+  int chunksize = N/NUM_THREADS;
+  //temporary array to hold the partial sums
+  int t_sums[NUM_THREADS+1];
+  t_sums[0]=0;  // 0 in first element since first chunk of dest will not be added to anything
+  // computing partial sums in parallel
+  #pragma omp parallel num_threads(NUM_THREADS)
+  {
+    int id = omp_get_thread_num();
+    int loc =0;
+    #pragma omp for schedule(static,  chunksize)
+    for(int i=0;i<N;i++){
+      loc+=source[i];
+      dest[i] = loc;
+    }
+    t_sums[id+1] = dest[id*chunksize+chunksize-1];
+  }
+  for(int i=2;i<NUM_THREADS;i++){
+    t_sums[i] += t_sums[i-1];
+  }
+  //adding the partial sums back to the original array
+  #pragma omp parallel num_threads(NUM_THREADS)
+  {
+    int id = omp_get_thread_num();
+    #pragma omp for schedule(static, chunksize)
+    for(int i=0;i<N;i++){
+      dest[i] += t_sums[id];
+    }
+  }
 
-int sse4_version(int* source, int* dest) { return 0; }
+  return dest[N-1];
+}
 
-int avx2_version(int* source, int* dest) { return 0; }
+
+void prefix(int *p, int* q) {
+    v8i x = _mm256_load_si256((v8i*) p);
+    x = _mm256_add_epi32(x, _mm256_slli_si256(x, 4));
+    x = _mm256_add_epi32(x, _mm256_slli_si256(x, 8));
+    _mm256_store_si256((v8i*) q, x);
+}
+void prefix_sse(int *p, int* q) {
+    v4i x = _mm_load_si128((v4i*) p);
+    x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+    x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+    _mm_store_si128((v4i*) q, x);
+}
+
+
+v4i accumulate(int *p, v4i s) {
+    v4i d = (v4i) _mm_broadcast_ss((float*) &p[3]);
+    v4i x = _mm_load_si128((v4i*) p);
+    x = _mm_add_epi32(s, x);
+    _mm_store_si128((v4i*) p, x);
+    return _mm_add_epi32(s, d);
+}
+
+int sse4_version(int* source, int* dest) { 
+  for (int i = 0; i < N; i += 4)
+        prefix_sse(&source[i], &dest[i]);
+    
+    v4i s = _mm_setzero_si128();
+    
+    for (int i = 0; i < N; i += 4)
+        s = accumulate(&dest[i], s);
+
+    return dest[N-1];
+}
+
+
+int avx2_version(int* source, int* dest) { 
+  for (int i = 0; i < N; i += 8)
+        prefix(&source[i], &dest[i]);
+    
+    v4i s = _mm_setzero_si128();
+    
+    for (int i = 0; i < N; i += 4)
+        s = accumulate(&dest[i], s);
+    return dest[N-1];
+ }
 
 int* array = nullptr;
 int* ref_res = nullptr;
@@ -61,6 +140,7 @@ __attribute__((optimize("no-tree-vectorize"))) int main() {
     avx2_res[i] = 0;
   }
 
+  
   HRTimer start = HR::now();
   int val_ser = ref_version(array, ref_res);
   HRTimer end = HR::now();
@@ -73,7 +153,7 @@ __attribute__((optimize("no-tree-vectorize"))) int main() {
   duration = duration_cast<microseconds>(end - start).count();
   assert(val_ser == val_omp || printf("OMP result is wrong!\n"));
   cout << "OMP version: " << val_omp << " time: " << duration << endl;
-
+  
   start = HR::now();
   int val_sse = sse4_version(array, sse_res);
   end = HR::now();

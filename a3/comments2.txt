@@ -32,15 +32,14 @@ Intrinsics Version: Matrix Size = 8192, Time = 0.00000 sec
 parallelization method: used pipeling. when 1 iteration of k begins, after a certain number of iterations of i, begin the next iteration of k in a new thread
 since the rows are written one once.
 
-for problem size N = 1<<12
 $ g++ -g -fopenmp -o prob3 problem3.cpp 
 $ ./prob3
 Time for reference version: 4.30799 seconds
 No differences found between base and test versions
 Version1: Time with OpenMP: 1.85099 seconds
 
-novo@vimaan:~/course/610/assign3$ g++ -O2 -g -fopenmp -o prob3 problem3.cpp 
-novo@vimaan:~/course/610/assign3$ ./prob3
+$ g++ -O2 -g -fopenmp -o prob3 problem3.cpp 
+$ ./prob3
 Time for reference version: 0.934125 seconds
 No differences found between base and test versions
 Version1: Time with OpenMP: 0.771951 seconds
@@ -53,3 +52,13 @@ $ ./prob3
 Time for reference version: 17.215 seconds
 No differences found between base and test versions
 Version1: Time with OpenMP: 3.86221 seconds
+
+
+# problem 2
+$ g++ -g -mavx2 -O2 -o prob2 problem2.cpp 
+$ ./prob2 
+Reference Version: Matrix Size = 8192, 0.62129 GFLOPS; Time = 0.43206 sec
+Optimized Version: Matrix Size = 8192, Time = 0.11366 sec
+No differences found between base and test versions
+Intrinsics Version: Matrix Size = 8192, Time = 0.06941 sec
+No differences found between base and test versions

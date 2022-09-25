@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sys/time.h>
 #include <unistd.h>
+#include<immintrin.h>
 
 using std::cout;
 using std::endl;
@@ -96,7 +97,42 @@ void optimized(double **__restrict__ A, double *__restrict__ x, double *__restri
 //   }
 // }
 
-void avx_version(double **A, double *x, double *y_opt, double *z_opt) {}
+void avx_version(double **A, double *x, double *y_opt, double *z_opt) {
+  __m256d a,b,c,temp;
+  for (int i = 0; i < N; i++)
+  {
+    c = _mm256_broadcast_sd(&x[i]);
+    for (int j = 0; j < N; j+=4)
+    {
+      //y_opt[j] = y_opt[j] + A[i][j] * x[i];
+      a = _mm256_load_pd(&y_opt[j]);
+      b = _mm256_load_pd(&A[i][j]);
+      
+      temp = _mm256_mul_pd(b,c);
+      a = _mm256_add_pd(a,temp);
+      _mm256_store_pd(&y_opt[j],a);
+
+    }
+  }
+  double * buf =(double* )_mm_malloc(4*sizeof(double),32);;
+  for (int j = 0; j < N; j++)
+  {
+    c = _mm256_broadcast_sd(&z_opt[j]);
+    for (int i = 0; i < N; i+=4)
+    {
+      //z_opt[j] = z_opt[j] + A[j][i] * x[i];
+      a = _mm256_load_pd(&x[i]);
+      b = _mm256_load_pd(&A[j][i]);
+      
+      temp = _mm256_mul_pd(a,b);
+      c = _mm256_add_pd(c,temp);
+      
+    }
+    _mm256_store_pd(&buf[0],c);
+    z_opt[j] = buf[0];
+
+  }
+}
 
 int main()
 {
@@ -111,16 +147,18 @@ int main()
   A = new double *[N];
   for (int i = 0; i < N; i++)
   {
-    A[i] = new double[N];
+    A[i] = (double* )_mm_malloc(N*sizeof(double),32);
   }
 
   double *x, *y_ref, *z_ref, *y_opt, *z_opt;
   x = new double[N];
+  x = (double* )_mm_malloc(N*sizeof(double),32);
   y_ref = new double[N];
   z_ref = new double[N];
-  y_opt = new double[N];
-  z_opt = new double[N];
-
+  //y_opt = new double[N];
+  y_opt = (double* )_mm_malloc(N*sizeof(double),32);
+  //z_opt = new double[N];
+  z_opt = (double* )_mm_malloc(N*sizeof(double),32);
   for (i = 0; i < N; i++)
   {
     x[i] = i;

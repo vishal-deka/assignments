@@ -6,7 +6,6 @@
 #include <omp.h>
 #include <stdio.h>
 #include <unistd.h>
-#define NUM_THREADS 5
 #define N (1 << 12)
 #define ITER 100
 
@@ -41,7 +40,6 @@ void reference(uint32_t **A)
 }
 
 // TODO: MAKE YOUR CHANGES TO OPTIMIZE THIS FUNCTION
-int *cflags;
 void omp_version(uint32_t **A)
 {
   int t = omp_get_num_threads();
